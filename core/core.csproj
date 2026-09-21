@@ -8,7 +8,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="System.Diagnostics.PerformanceCounter" Version="10.0.9" />
+		<PackageReference Include="System.Diagnostics.PerformanceCounter" Version="10.0.12" />
 		<!-- remove ts bc not compatible with native aot
 		<PackageReference Include="System.Management" Version="10.0.3" />-->	
 	</ItemGroup>

@@ -44,9 +44,6 @@ class Program
         using var network = new NetworkHelper();
         using var disk = new DiskHelper();
         var procMonitor = new ProcessMonitor();
-
-        string cpuName = CpuHelper.GetProcessorCoreName();
-        string osName = CpuHelper.GetOSName();
         var (gpuName, gpuDriver, gpuVramTotalMB) = GpuHelper.GetGPUInfo();
 
         cpu.WarmUp();
@@ -90,7 +87,7 @@ class Program
 
                     if (_statsDirty && _currentStats is not null)
                     {
-                        RenderStats(layout, _currentStats, cpuName, osName, gpuName, gpuDriver, gpuVramTotalMB);
+                        RenderStats(layout, _currentStats, gpuName, gpuDriver, gpuVramTotalMB);
                         _statsDirty = false;
                         refreshed = true;
                     }
@@ -128,8 +125,8 @@ class Program
     {
         var layout = new Layout("Root")
             .SplitRows(
-                new Layout("Stat").Ratio(2),
-                new Layout("Process").Ratio(4),
+                new Layout("Stat").Ratio(3).MinimumSize(10),
+                new Layout("Process").Ratio(5),
                 new Layout("Intro").Size(1));
 
         layout["Stat"].SplitColumns(
@@ -268,9 +265,9 @@ class Program
         return (changed, false);
     }
 
-    private static void RenderStats(Layout layout, SystemStats stats, string cpuName, string osName, string gpuName, string gpuDriver, double gpuVramTotalMB)
+    private static void RenderStats(Layout layout, SystemStats stats, string gpuName, string gpuDriver, double gpuVramTotalMB)
     {
-        layout["CPU"].Update(CpuPanel.Build(stats.Cpu, cpuName, osName));
+        layout["CPU"].Update(CpuPanel.Build(stats.Cpu));
         double usedRamGB = stats.Ram.TotalGB * stats.Ram.UsedPct / 100.0;
         layout["RAM"].Update(RamPanel.Build(stats.Ram.UsedPct, usedRamGB, stats.Ram.TotalGB));
         layout["GPU"].Update(GpuPanel.Build(stats.Gpu.UsagePercent, gpuName, gpuDriver, stats.Gpu.VramUsedMB, gpuVramTotalMB));

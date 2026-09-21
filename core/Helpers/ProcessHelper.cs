@@ -17,7 +17,7 @@ public static partial class NativeProcessManager
     private const uint STATUS_SUCCESS = 0x00000000;
     private const uint STATUS_INFO_LENGTH_MISMATCH = 0xC0000004;
 
-    [LibraryImport("ntdll.dll",StringMarshalling = StringMarshalling.Utf16)]
+    [LibraryImport("ntdll.dll", StringMarshalling = StringMarshalling.Utf16)]
     private static partial uint NtQuerySystemInformation(
         uint SystemInformationClass,
         IntPtr SystemInformation,
