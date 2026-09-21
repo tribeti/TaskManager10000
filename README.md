@@ -1,6 +1,6 @@
 # TaskManager10k
 
-![](https://github.com/tribeti/TaskManager10000/blob/dev/media/app.gif?raw=true)
+![](https://github.com/tribeti/TaskManager10000/blob/master/media/app.gif?raw=true)
 
 **TaskManager10k** is a lightweight, Windows-native terminal-based task manager and system monitor.  
 It is inspired by popular tools such as htop, btop, fastfetch, and HWiNFO, delivering real-time system insights in a clean Text User Interface (TUI).
