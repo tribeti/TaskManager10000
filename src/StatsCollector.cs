@@ -18,6 +18,7 @@ public static class StatsCollector
     public static volatile SystemStats? Current;
     public static volatile bool StatsDirty = true;
     public static volatile bool ProcDirty = true;
+    public static volatile bool PortDirty = true;
 
     public static void StartStatsCollector(CpuHelper cpu, GpuHelper gpu, NetworkHelper network, DiskHelper disk)
     {
@@ -49,6 +50,21 @@ public static class StatsCollector
             {
                 procMonitor.Refresh();
                 ProcDirty = true;
+                await Task.Delay(1000);
+            }
+        });
+    }
+
+    public static void StartPortCollector(ProcessMonitor procMonitor, PortMonitor portMonitor)
+    {
+        _ = Task.Run(async () =>
+        {
+            while (true)
+            {
+                // Names come from the process snapshot the ProcessMonitor is
+                // already refreshing every second - no second sweep needed.
+                portMonitor.Refresh(procMonitor.Snapshot());
+                PortDirty = true;
                 await Task.Delay(1000);
             }
         });

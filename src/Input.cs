@@ -18,7 +18,7 @@ public class ViewState
 
 public static class Input
 {
-    public static (bool Changed, bool ShouldExit) HandleInput(ViewState state, List<ProcessInfo> processes, int pageSize)
+    public static (bool Changed, bool ShouldExit) HandleInput(ViewState state, List<ProcessInfo> processes, int pageSize, int scrollCount = -1)
     {
         bool changed = false;
         while (Console.KeyAvailable)
@@ -41,8 +41,31 @@ public static class Input
                 continue;
             }
 
-            // System workspace has no process table: only Q works
-            if (state.Workspace == AppShell.SystemWorkspace)
+            if (!state.SearchMode)
+            {
+                if (key == ConsoleKey.UpArrow)
+                {
+                    state.SelectedIndex = Math.Max(0, state.SelectedIndex - 1);
+                    if (state.SelectedIndex < state.ScrollOffset)
+                        state.ScrollOffset = state.SelectedIndex;
+                    changed = true;
+                    continue;
+                }
+
+                if (key == ConsoleKey.DownArrow)
+                {
+                    int count = scrollCount >= 0 ? scrollCount : processes.Count;
+                    int maxIdx = Math.Max(0, count - 1);
+                    state.SelectedIndex = Math.Min(maxIdx, state.SelectedIndex + 1);
+                    if (state.SelectedIndex >= state.ScrollOffset + pageSize)
+                        state.ScrollOffset = state.SelectedIndex - pageSize + 1;
+                    changed = true;
+                    continue;
+                }
+            }
+
+            // Ports workspace has no process actions: only Q works
+            if (state.Workspace == AppShell.PortWorkspace)
             {
                 if (key == ConsoleKey.Q)
                     return (false, true);
@@ -79,21 +102,6 @@ public static class Input
             {
                 switch (key)
                 {
-                    case ConsoleKey.UpArrow:
-                        state.SelectedIndex = Math.Max(0, state.SelectedIndex - 1);
-                        if (state.SelectedIndex < state.ScrollOffset)
-                            state.ScrollOffset = state.SelectedIndex;
-                        changed = true;
-                        break;
-
-                    case ConsoleKey.DownArrow:
-                        int maxIdx = Math.Max(0, processes.Count - 1);
-                        state.SelectedIndex = Math.Min(maxIdx, state.SelectedIndex + 1);
-                        if (state.SelectedIndex >= state.ScrollOffset + pageSize)
-                            state.ScrollOffset = state.SelectedIndex - pageSize + 1;
-                        changed = true;
-                        break;
-
                     case ConsoleKey.K when processes.Count > 0:
                         var target = processes[Math.Min(state.SelectedIndex, processes.Count - 1)];
                         if (ki.Modifiers.HasFlag(ConsoleModifiers.Shift))

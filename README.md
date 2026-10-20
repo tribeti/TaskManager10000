@@ -9,6 +9,7 @@ It is inspired by popular tools such as htop, btop, fastfetch, and HWiNFO, deliv
 
 - Real-time monitoring of CPU, RAM, GPU, network, and disk usage  
 - Live process table displaying memory and CPU consumption  
+- Live TCP/UDP connection table with owning process (Ports tab)  
 - Process management: sort, search, pause/resume, and terminate processes  
 - Detailed system information including CPU model, motherboard, BIOS, OS version, and uptime  
 - Built with .NET and Spectre.Console for a responsive and lightweight TUI experience  
