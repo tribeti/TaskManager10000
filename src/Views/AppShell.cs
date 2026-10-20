@@ -39,11 +39,9 @@ public static class AppShell
         // Empty layout for user to decorate
         var l = new Layout("Root").SplitRows(
             new Layout("Tabs").Size(1),
-            new Layout("Content"),
-            new Layout("Intro").Size(1));
+            new Layout("Content"));
 
         l["Content"].Update(new Panel("[dim]Empty workspace - decorate as you wish[/]").Expand());
-        l["Intro"].Update(IntroBar());
         return l;
     }
 
