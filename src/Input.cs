@@ -28,7 +28,7 @@ public static class Input
 
             // Workspace switch: 1 -> 9
             int ws = -1;
-            if (key is >= ConsoleKey.D1 and <= ConsoleKey.D9)
+            if (!state.SearchMode && key is >= ConsoleKey.D1 and <= ConsoleKey.D9)
                 ws = key - ConsoleKey.D1;
 
             if (ws >= 0)
