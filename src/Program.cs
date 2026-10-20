@@ -22,6 +22,7 @@ class Program
     {
         public int SelectedIndex { get; set; }
         public int ScrollOffset { get; set; }
+        public int Workspace { get; set; }
         public SortMode SortMode { get; set; } = SortMode.MemoryDesc;
         public char[] SearchBuffer = new char[64];
         public int SearchLength { get; set; } = 0;
@@ -35,6 +36,9 @@ class Program
 
     private static int _cachedWindowHeight = -1;
     private static int _cachedPageSize = 10;
+    private static int _cachedWorkspace = -1;
+    private static readonly string[] WorkspaceNames = ["Dashboard", "System"];
+    private const int SystemWorkspace = 1;
 
     static void Main()
     {
@@ -63,6 +67,15 @@ class Program
         var procPanel = new Panel(procTable).Expand();
         layout["Table"].Update(procPanel);
 
+        // ── Create empty system workspace (user will decorate later) ──
+        var systemLayout = CreateSystemLayout();
+        Layout[] workspaces = [layout, systemLayout];
+        int shown = 0;
+
+        // Set tab bar for each workspace
+        for (int i = 0; i < workspaces.Length; i++)
+            workspaces[i]["Tabs"].Update(TabBar(i));
+
         // ── Background Tasks ─────────────────────────────────────
         StartStatsCollector(cpu, gpu, network, disk);
         StartProcessCollector(procMonitor);
@@ -77,15 +90,24 @@ class Program
 
                 while (true)
                 {
-                    int pageSize = CalculatePageSize();
+                    int pageSize = CalculatePageSize(viewState.Workspace);
                     var (inputChanged, shouldExit) = HandleInput(viewState, filtered, pageSize);
 
                     if (shouldExit)
                         break;
 
+                    if (viewState.Workspace != shown)
+                    {
+                        shown = viewState.Workspace;
+                        ctx.UpdateTarget(workspaces[shown]);
+                        _statsDirty = true;
+                        pageSize = CalculatePageSize(shown);
+                    }
+
                     bool refreshed = false;
 
-                    if (_statsDirty && _currentStats is not null)
+                    // Only render stats if not in system workspace
+                    if (_statsDirty && _currentStats is not null && viewState.Workspace != SystemWorkspace)
                     {
                         RenderStats(layout, _currentStats, gpuName, gpuDriver, gpuVramTotalMB);
                         _statsDirty = false;
@@ -125,6 +147,7 @@ class Program
     {
         var layout = new Layout("Root")
             .SplitRows(
+                new Layout("Tabs").Size(1),
                 new Layout("Stat").Ratio(3).MinimumSize(10),
                 new Layout("Process").Ratio(5),
                 new Layout("Intro").Size(1));
@@ -142,24 +165,47 @@ class Program
             new Layout("Network").Ratio(1),
             new Layout("Disk").Ratio(2));
 
-        layout["Intro"].Update(
-            new Panel("[green]K[/]: Kill | [green]Shift+K[/]: Kill All | [cyan]P[/]: Pause/Resume | [blue]S[/]: Sort | [yellow]F[/]: Find | [red]ESC[/]: Clear | [red]Q[/]: Quit")
-                .Border(BoxBorder.None).Collapse());
+        layout["Intro"].Update(IntroBar());
 
         return layout;
     }
 
-    private static int CalculatePageSize()
+    private static Layout CreateSystemLayout()
+    {
+        // Empty layout for user to decorate
+        var l = new Layout("Root").SplitRows(
+            new Layout("Tabs").Size(1),
+            new Layout("Content"),
+            new Layout("Intro").Size(1));
+
+        l["Content"].Update(new Panel("[dim]Empty workspace - decorate as you wish[/]").Expand());
+        l["Intro"].Update(IntroBar());
+        return l;
+    }
+
+    private static Markup TabBar(int active) =>
+        new(string.Concat(WorkspaceNames.Select((name, i) => i == active
+            ? $"[black on yellow] {i + 1}:{name} [/]"
+            : $"[grey] {i + 1}:{name} [/]")));
+
+    private static Panel IntroBar() =>
+        new Panel("[green]K[/]: Kill | [green]Shift+K[/]: Kill All | [cyan]P[/]: Pause/Resume | [blue]S[/]: Sort | [yellow]F[/]: Find | [Wheat1]1 / 2[/]: Switch views | [red]ESC[/]: Clear | [red]Q[/]: Quit")
+            .Border(BoxBorder.None).Collapse();
+
+    private static int CalculatePageSize(int workspace)
     {
         int currentHeight = Console.WindowHeight;
-        if (currentHeight == _cachedWindowHeight)
+        if (currentHeight == _cachedWindowHeight && workspace == _cachedWorkspace)
             return _cachedPageSize;
 
         _cachedWindowHeight = currentHeight;
-        const int IntroHeight = 1;
+        _cachedWorkspace = workspace;
+        const int ChromeHeight = 2; // tab bar + key hints bar
         const int TableVerticalPadding = 4;
-        int remainingForRows = currentHeight - IntroHeight;
-        int processHeight = (int) (remainingForRows * 4.0 / 6.0);
+        int remainingForRows = currentHeight - ChromeHeight;
+        int processHeight = workspace == 0
+            ? (int)(remainingForRows * 4.0 / 6.0)
+            : remainingForRows;
 
         _cachedPageSize = Math.Max(3, processHeight - TableVerticalPadding);
         return _cachedPageSize;
@@ -172,6 +218,29 @@ class Program
         {
             var ki = Console.ReadKey(true);
             var key = ki.Key;
+
+            // Workspace switch: 1 -> 9
+            int ws = -1;
+            if (key is >= ConsoleKey.D1 and <= ConsoleKey.D9)
+                ws = key - ConsoleKey.D1;
+
+            if (ws >= 0)
+            {
+                if (ws < WorkspaceNames.Length && ws != state.Workspace)
+                {
+                    state.Workspace = ws;
+                    changed = true;
+                }
+                continue;
+            }
+
+            // System workspace has no process table: only Q works
+            if (state.Workspace == SystemWorkspace)
+            {
+                if (key == ConsoleKey.Q)
+                    return (false, true);
+                continue;
+            }
 
             if (state.SearchMode)
             {
@@ -283,7 +352,6 @@ class Program
         {
             procTable.Caption = new TableTitle(
                 $"[yellow]Search: {Markup.Escape(state.GetSearchQuery())}{(state.SearchMode ? "_" : "")}[/] ([dim]{processes.Count} results[/])");
-
         }
         else
         {
