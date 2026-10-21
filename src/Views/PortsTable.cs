@@ -21,8 +21,6 @@ public static class PortsTable
     {
         table.Rows.Clear();
 
-        table.Caption = new TableTitle($"[OrangeRed1]{connections.Count} connections[/]");
-
         int start = state.PortScrollOffset;
         int end = Math.Min(start + pageSize, connections.Count);
 

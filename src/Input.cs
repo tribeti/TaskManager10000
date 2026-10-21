@@ -20,7 +20,7 @@ public class ViewState
 
 public static class Input
 {
-    public static (bool Changed, bool ShouldExit) HandleInput(ViewState state, List<ProcessInfo> processes, int pageSize, int scrollCount = -1)
+    public static (bool Changed, bool ShouldExit) HandleInput(ViewState state, List<ProcessInfo> processes, int pageSize, IReadOnlyList<ConnectionInfo>? connections = null)
     {
         bool changed = false;
         while (Console.KeyAvailable)
@@ -72,7 +72,7 @@ public static class Input
                     bool isPortsWorkspace = state.Workspace == AppShell.PortWorkspace;
                     int selectedIndex = isPortsWorkspace ? state.PortSelectedIndex : state.SelectedIndex;
                     int scrollOffset = isPortsWorkspace ? state.PortScrollOffset : state.ScrollOffset;
-                    int count = scrollCount >= 0 ? scrollCount : processes.Count;
+                    int count = isPortsWorkspace ? connections?.Count ?? 0 : processes.Count;
                     int maxIdx = Math.Max(0, count - 1);
                     selectedIndex = Math.Min(maxIdx, selectedIndex + 1);
                     if (selectedIndex >= scrollOffset + pageSize)
@@ -92,11 +92,19 @@ public static class Input
                 }
             }
 
-            // Ports workspace has no process actions: only Q works
             if (state.Workspace == AppShell.PortWorkspace)
             {
                 if (key == ConsoleKey.Q)
                     return (false, true);
+
+                if (key == ConsoleKey.K && connections is { Count: > 0 })
+                {
+                    int index = Math.Clamp(state.PortSelectedIndex, 0, connections.Count - 1);
+                    int pid = connections[index].Pid;
+                    if (pid != Environment.ProcessId)
+                        ProcessMonitor.Kill(pid);
+                    changed = true;
+                }
                 continue;
             }
 
