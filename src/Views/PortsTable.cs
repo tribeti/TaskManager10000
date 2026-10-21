@@ -23,13 +23,13 @@ public static class PortsTable
 
         table.Caption = new TableTitle($"[OrangeRed1]{connections.Count} connections[/]");
 
-        int start = state.ScrollOffset;
+        int start = state.PortScrollOffset;
         int end = Math.Min(start + pageSize, connections.Count);
 
         for (int i = start; i < end; i++)
         {
             var c = connections[i];
-            bool isSelected = i == state.SelectedIndex;
+            bool isSelected = i == state.PortSelectedIndex;
 
             string local = Endpoint(c.LocalAddress, c.LocalPort);
             string remote = Endpoint(c.RemoteAddress, c.RemotePort);

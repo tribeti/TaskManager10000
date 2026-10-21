@@ -8,6 +8,8 @@ public class ViewState
 {
     public int SelectedIndex { get; set; }
     public int ScrollOffset { get; set; }
+    public int PortSelectedIndex { get; set; }
+    public int PortScrollOffset { get; set; }
     public int Workspace { get; set; }
     public SortMode SortMode { get; set; } = SortMode.MemoryDesc;
     public char[] SearchBuffer = new char[64];
@@ -45,20 +47,46 @@ public static class Input
             {
                 if (key == ConsoleKey.UpArrow)
                 {
-                    state.SelectedIndex = Math.Max(0, state.SelectedIndex - 1);
-                    if (state.SelectedIndex < state.ScrollOffset)
-                        state.ScrollOffset = state.SelectedIndex;
+                    bool isPortsWorkspace = state.Workspace == AppShell.PortWorkspace;
+                    int selectedIndex = isPortsWorkspace ? state.PortSelectedIndex : state.SelectedIndex;
+                    int scrollOffset = isPortsWorkspace ? state.PortScrollOffset : state.ScrollOffset;
+                    selectedIndex = Math.Max(0, selectedIndex - 1);
+                    if (selectedIndex < scrollOffset)
+                        scrollOffset = selectedIndex;
+                    if (isPortsWorkspace)
+                    {
+                        state.PortSelectedIndex = selectedIndex;
+                        state.PortScrollOffset = scrollOffset;
+                    }
+                    else
+                    {
+                        state.SelectedIndex = selectedIndex;
+                        state.ScrollOffset = scrollOffset;
+                    }
                     changed = true;
                     continue;
                 }
 
                 if (key == ConsoleKey.DownArrow)
                 {
+                    bool isPortsWorkspace = state.Workspace == AppShell.PortWorkspace;
+                    int selectedIndex = isPortsWorkspace ? state.PortSelectedIndex : state.SelectedIndex;
+                    int scrollOffset = isPortsWorkspace ? state.PortScrollOffset : state.ScrollOffset;
                     int count = scrollCount >= 0 ? scrollCount : processes.Count;
                     int maxIdx = Math.Max(0, count - 1);
-                    state.SelectedIndex = Math.Min(maxIdx, state.SelectedIndex + 1);
-                    if (state.SelectedIndex >= state.ScrollOffset + pageSize)
-                        state.ScrollOffset = state.SelectedIndex - pageSize + 1;
+                    selectedIndex = Math.Min(maxIdx, selectedIndex + 1);
+                    if (selectedIndex >= scrollOffset + pageSize)
+                        scrollOffset = selectedIndex - pageSize + 1;
+                    if (isPortsWorkspace)
+                    {
+                        state.PortSelectedIndex = selectedIndex;
+                        state.PortScrollOffset = scrollOffset;
+                    }
+                    else
+                    {
+                        state.SelectedIndex = selectedIndex;
+                        state.ScrollOffset = scrollOffset;
+                    }
                     changed = true;
                     continue;
                 }

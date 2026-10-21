@@ -112,13 +112,13 @@ class Program
                     {
                         if (connections.Count == 0)
                         {
-                            viewState.SelectedIndex = 0;
-                            viewState.ScrollOffset = 0;
+                            viewState.PortSelectedIndex = 0;
+                            viewState.PortScrollOffset = 0;
                         }
                         else
                         {
-                            viewState.SelectedIndex = Math.Clamp(viewState.SelectedIndex, 0, connections.Count - 1);
-                            viewState.ScrollOffset = Math.Clamp(viewState.ScrollOffset, 0, Math.Max(0, connections.Count - pageSize));
+                            viewState.PortSelectedIndex = Math.Clamp(viewState.PortSelectedIndex, 0, connections.Count - 1);
+                            viewState.PortScrollOffset = Math.Clamp(viewState.PortScrollOffset, 0, Math.Max(0, connections.Count - pageSize));
                         }
 
                         PortsTable.Render(portsTable, connections, viewState, pageSize);
