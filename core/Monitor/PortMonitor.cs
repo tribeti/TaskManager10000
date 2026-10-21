@@ -1,5 +1,7 @@
-using System.Runtime.InteropServices;
 using core.Models;
+using System.Buffers.Binary;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace core.Monitor;
 
@@ -7,159 +9,146 @@ public partial class PortMonitor
 {
     private volatile List<ConnectionInfo> _cache = [];
 
+    private readonly object _gate = new();
+    private byte[] _tcpBuf = GC.AllocateUninitializedArray<byte>(64 * 1024);
+    private byte[] _udpBuf = GC.AllocateUninitializedArray<byte>(32 * 1024);
+    private readonly Dictionary<uint, string> _ipCache = new(256);
+    private int _lastCount = 256;
+
     private const int AF_INET = 2;
     private const int TCP_TABLE_OWNER_PID_ALL = 5;
     private const int UDP_TABLE_OWNER_PID = 1;
     private const uint ERROR_INSUFFICIENT_BUFFER = 122;
 
-    private enum TableKind { Tcp, Udp }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct TcpRow
+    {
+        public uint State, LocalAddr, LocalPort, RemoteAddr, RemotePort, Pid;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct UdpRow
+    {
+        public uint LocalAddr, LocalPort, Pid;
+    }
 
     [LibraryImport("iphlpapi.dll")]
-    private static partial uint GetExtendedTcpTable(
-        IntPtr table,
-        ref int size,
-        [MarshalAs(UnmanagedType.Bool)] bool order,
-        int addressFamily,
-        int tableClass,
-        uint reserved);
+    private static partial uint GetExtendedTcpTable(ref byte table, ref int size, int order, int addressFamily, int tableClass, uint reserved);
 
     [LibraryImport("iphlpapi.dll")]
-    private static partial uint GetExtendedUdpTable(
-        IntPtr table,
-        ref int size,
-        [MarshalAs(UnmanagedType.Bool)] bool order,
-        int addressFamily,
-        int tableClass,
-        uint reserved);
+    private static partial uint GetExtendedUdpTable(ref byte table, ref int size, int order, int addressFamily, int tableClass, uint reserved);
 
-    // Volatile snapshot of the last Refresh (list is replaced, never mutated).
+    private static readonly Comparer<ConnectionInfo> ByEndpoint =
+        Comparer<ConnectionInfo>.Create(static (a, b) =>
+        {
+            int c = string.Compare(a.ProcessName, b.ProcessName, StringComparison.OrdinalIgnoreCase);
+            if (c != 0)
+                return c;
+            c = a.LocalPort.CompareTo(b.LocalPort);
+            return c != 0 ? c : a.RemotePort.CompareTo(b.RemotePort);
+        });
+
     public List<ConnectionInfo> Connections => _cache;
 
     public void Refresh(IReadOnlyList<ProcessInfo> processes)
     {
-        var names = new Dictionary<int, string>(processes.Count);
-        foreach (var p in processes)
+        lock (_gate)
         {
-            if (p.Id is 0 or 4) continue;
-            names[p.Id] = p.Name;
-        }
-
-        var rows = new List<ConnectionInfo>();
-
-        ReadTcp(rows, names);
-        ReadUdp(rows, names);
-
-        _cache = rows
-            .OrderBy(c => c.Protocol)
-            .ThenBy(c => c.ProcessName)
-            .ThenBy(c => c.LocalPort)
-            .ThenBy(c => c.RemotePort)
-            .ToList();
-    }
-
-    private static void ReadTcp(List<ConnectionInfo> rows, Dictionary<int, string> names)
-    {
-        IntPtr buffer = GetTable(TableKind.Tcp);
-        if (buffer == IntPtr.Zero) return;
-
-        try
-        {
-            int count = Marshal.ReadInt32(buffer);
-
-            for (int i = 0; i < count; i++)
+            var names = new Dictionary<int, string>(processes.Count);
+            foreach (var p in processes)
             {
-                IntPtr row = IntPtr.Add(buffer, 4 + i * 24);
-
-                int pid = Marshal.ReadInt32(row, 20);
-                if (!names.TryGetValue(pid, out var name)) continue;
-
-                rows.Add(new ConnectionInfo(
-                    "TCP",
-                    IpToString((uint) Marshal.ReadInt32(row, 4)),
-                    Port((uint) Marshal.ReadInt32(row, 8)),
-                    IpToString((uint) Marshal.ReadInt32(row, 12)),
-                    Port((uint) Marshal.ReadInt32(row, 16)),
-                    StateToText(Marshal.ReadInt32(row, 0)),
-                    pid,
-                    name));
+                if (p.Id is 0 or 4)
+                    continue;
+                names[p.Id] = p.Name;
             }
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(buffer);
+
+            var rows = new List<ConnectionInfo>(_lastCount + 32);
+
+            ReadTcp(rows, names);
+            int tcpCount = rows.Count;
+            ReadUdp(rows, names);
+
+            rows.Sort(0, tcpCount, ByEndpoint);
+            rows.Sort(tcpCount, rows.Count - tcpCount, ByEndpoint);
+
+            _lastCount = rows.Count;
+            _cache = rows;
         }
     }
 
-    private static void ReadUdp(List<ConnectionInfo> rows, Dictionary<int, string> names)
+    private void ReadTcp(List<ConnectionInfo> rows, Dictionary<int, string> names)
     {
-        IntPtr buffer = GetTable(TableKind.Udp);
-        if (buffer == IntPtr.Zero) return;
+        if (!FillTable(ref _tcpBuf, tcp: true))
+            return;
 
-        try
+        var buf = _tcpBuf;
+        int count = Unsafe.ReadUnaligned<int>(ref buf[0]);
+        var table = MemoryMarshal.Cast<byte, TcpRow>(buf.AsSpan(4, count * Unsafe.SizeOf<TcpRow>()));
+
+        foreach (ref readonly var r in table)
         {
-            int count = Marshal.ReadInt32(buffer);
+            if (!names.TryGetValue((int) r.Pid, out var name))
+                continue;
 
-            for (int i = 0; i < count; i++)
-            {
-                IntPtr row = IntPtr.Add(buffer, 4 + i * 12);
-
-                int pid = Marshal.ReadInt32(row, 8);
-                if (!names.TryGetValue(pid, out var name)) continue;
-
-                rows.Add(new ConnectionInfo(
-                    "UDP",
-                    IpToString((uint) Marshal.ReadInt32(row, 0)),
-                    Port((uint) Marshal.ReadInt32(row, 4)),
-                    "",  // UDP has no remote endpoint
-                    0,
-                    "",  // and no state
-                    pid,
-                    name));
-            }
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(buffer);
+            rows.Add(new ConnectionInfo(
+                "TCP",
+                Ip(r.LocalAddr), Port(r.LocalPort),
+                Ip(r.RemoteAddr), Port(r.RemotePort),
+                StateToText((int) r.State),
+                (int) r.Pid, name));
         }
     }
 
-    private static IntPtr GetTable(TableKind kind)
+    private void ReadUdp(List<ConnectionInfo> rows, Dictionary<int, string> names)
     {
-        int size = 0;
-        IntPtr buffer = IntPtr.Zero;
+        if (!FillTable(ref _udpBuf, tcp: false))
+            return;
 
+        var buf = _udpBuf;
+        int count = Unsafe.ReadUnaligned<int>(ref buf[0]);
+        var table = MemoryMarshal.Cast<byte, UdpRow>(buf.AsSpan(4, count * Unsafe.SizeOf<UdpRow>()));
+
+        foreach (ref readonly var r in table)
+        {
+            if (!names.TryGetValue((int) r.Pid, out var name))
+                continue;
+
+            rows.Add(new ConnectionInfo(
+                "UDP", Ip(r.LocalAddr), Port(r.LocalPort),
+                "", 0, "", (int) r.Pid, name));
+        }
+    }
+
+    private static bool FillTable(ref byte[] buf, bool tcp)
+    {
         for (int attempt = 0; attempt < 5; attempt++)
         {
-            uint result = kind == TableKind.Tcp
-                ? GetExtendedTcpTable(buffer, ref size, false, AF_INET, TCP_TABLE_OWNER_PID_ALL, 0)
-                : GetExtendedUdpTable(buffer, ref size, false, AF_INET, UDP_TABLE_OWNER_PID, 0);
+            int size = buf.Length;
+            uint result = tcp
+                ? GetExtendedTcpTable(ref MemoryMarshal.GetArrayDataReference(buf), ref size, 0, AF_INET, TCP_TABLE_OWNER_PID_ALL, 0)
+                : GetExtendedUdpTable(ref MemoryMarshal.GetArrayDataReference(buf), ref size, 0, AF_INET, UDP_TABLE_OWNER_PID, 0);
 
-            if (result == 0) return buffer;
-
-            if (buffer != IntPtr.Zero)
-            {
-                Marshal.FreeHGlobal(buffer);
-                buffer = IntPtr.Zero;
-            }
-
+            if (result == 0)
+                return true;
             if (result != ERROR_INSUFFICIENT_BUFFER || size <= 0)
-                return IntPtr.Zero;
+                return false;
 
-            buffer = Marshal.AllocHGlobal(size);
+            buf = GC.AllocateUninitializedArray<byte>(size + size / 4);
         }
-
-        if (buffer != IntPtr.Zero) Marshal.FreeHGlobal(buffer);
-        return IntPtr.Zero;
+        return false;
     }
 
-    private static string IpToString(uint ip)
+    private string Ip(uint ip)
     {
-        if (ip == 0) return "0.0.0.0";
-        return $"{ip & 0xFF}.{(ip >> 8) & 0xFF}.{(ip >> 16) & 0xFF}.{(ip >> 24) & 0xFF}";
+        if (_ipCache.TryGetValue(ip, out var s))
+            return s;
+        if (_ipCache.Count >= 4096)
+            _ipCache.Clear();
+        return _ipCache[ip] =
+            $"{ip & 0xFF}.{(ip >> 8) & 0xFF}.{(ip >> 16) & 0xFF}.{(ip >> 24) & 0xFF}";
     }
 
-    private static int Port(uint raw) =>
-        (int) (((raw & 0xFF) << 8) | ((raw >> 8) & 0xFF));
+    private static int Port(uint raw) => BinaryPrimitives.ReverseEndianness((ushort) raw);
 
     private static string StateToText(int state) => state switch
     {
