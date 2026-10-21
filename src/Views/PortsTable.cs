@@ -20,6 +20,7 @@ public static class PortsTable
     public static void Render(Table table, List<ConnectionInfo> connections, ViewState state, int pageSize)
     {
         table.Rows.Clear();
+        state.PortSelectedConnection = null;
 
         int start = state.PortScrollOffset;
         int end = Math.Min(start + pageSize, connections.Count);
@@ -36,6 +37,9 @@ public static class PortsTable
 
             if (isSelected)
             {
+                if (state.Workspace == AppShell.PortWorkspace)
+                    state.PortSelectedConnection = c;
+
                 table.AddRow(
                     $"[black on white]{c.Protocol}[/]",
                     $"[black on white]{local}[/]",

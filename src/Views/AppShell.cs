@@ -52,7 +52,7 @@ public static class AppShell
         bar.AddColumn(new GridColumn { NoWrap = true, Padding = new Padding(1, 0, 0, 0) });
         bar.AddColumn(new GridColumn { NoWrap = true, Alignment = Justify.Right });
         bar.AddRow(
-            "[green]K[/]: Close | [red]Q[/]: Quit",
+            "[green]K[/]: Kill process | [red]Q[/]: Quit",
             $"[OrangeRed1]{connectionCount} connections[/]");
         bar.Expand = true;
 

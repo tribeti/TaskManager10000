@@ -10,6 +10,7 @@ public class ViewState
     public int ScrollOffset { get; set; }
     public int PortSelectedIndex { get; set; }
     public int PortScrollOffset { get; set; }
+    public ConnectionInfo? PortSelectedConnection { get; set; }
     public int Workspace { get; set; }
     public SortMode SortMode { get; set; } = SortMode.MemoryDesc;
     public char[] SearchBuffer = new char[64];
@@ -97,13 +98,16 @@ public static class Input
                 if (key == ConsoleKey.Q)
                     return (false, true);
 
-                if (key == ConsoleKey.K && connections is { Count: > 0 })
+                if (key == ConsoleKey.K)
                 {
-                    int index = Math.Clamp(state.PortSelectedIndex, 0, connections.Count - 1);
-                    int pid = connections[index].Pid;
-                    if (pid != Environment.ProcessId)
-                        ProcessMonitor.Kill(pid);
-                    changed = true;
+                    var selected = state.PortSelectedConnection;
+                    if (selected is not null
+                        && connections?.Contains(selected) == true
+                        && selected.Pid != Environment.ProcessId)
+                    {
+                        ProcessMonitor.Kill(selected.Pid);
+                        changed = true;
+                    }
                 }
                 continue;
             }
