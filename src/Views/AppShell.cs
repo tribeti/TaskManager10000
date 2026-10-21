@@ -4,8 +4,8 @@ namespace src.Views;
 
 public static class AppShell
 {
-    public static readonly string[] WorkspaceNames = ["Dashboard", "System"];
-    public const int SystemWorkspace = 1;
+    public static readonly string[] WorkspaceNames = ["Dashboard", "Ports"];
+    public const int PortWorkspace = 1;
 
     public static Layout CreateLayout()
     {
@@ -34,14 +34,14 @@ public static class AppShell
         return layout;
     }
 
-    public static Layout CreateSystemLayout()
+    public static Layout CreateSystemLayout(Table portsTable)
     {
-        // Empty layout for user to decorate
+        // Workspace 2: full-height live connection table
         var l = new Layout("Root").SplitRows(
             new Layout("Tabs").Size(1),
             new Layout("Content"));
 
-        l["Content"].Update(new Panel("[dim]Empty workspace - decorate as you wish[/]").Expand());
+        l["Content"].Update(new Panel(portsTable).Expand());
         return l;
     }
 

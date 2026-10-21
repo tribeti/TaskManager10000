@@ -20,6 +20,7 @@ class Program
         using var network = new NetworkHelper();
         using var disk = new DiskHelper();
         var procMonitor = new ProcessMonitor();
+        var portMonitor = new PortMonitor();
         var (gpuName, gpuDriver, gpuVramTotalMB) = GpuHelper.GetGPUInfo();
 
         cpu.WarmUp();
@@ -35,8 +36,9 @@ class Program
         var procPanel = new Panel(procTable).Expand();
         layout["Table"].Update(procPanel);
 
-        // ── Create empty system workspace (user will decorate later) ──
-        var systemLayout = AppShell.CreateSystemLayout();
+        // ── Workspace 2: live TCP/UDP connections ──
+        var portsTable = PortsTable.Create();
+        var systemLayout = AppShell.CreateSystemLayout(portsTable);
         Layout[] workspaces = [layout, systemLayout];
         int shown = 0;
 
@@ -47,6 +49,7 @@ class Program
         // ── Background Tasks ─────────────────────────────────────
         StatsCollector.StartStatsCollector(cpu, gpu, network, disk);
         StatsCollector.StartProcessCollector(procMonitor);
+        StatsCollector.StartPortCollector(procMonitor, portMonitor);
 
         // ── Render Loop ──────────────────────────────────────────
         AnsiConsole.Live(layout)
@@ -58,8 +61,11 @@ class Program
 
                 while (true)
                 {
+                    var connections = portMonitor.Connections;
+
                     int pageSize = CalculatePageSize(viewState.Workspace);
-                    var (inputChanged, shouldExit) = Input.HandleInput(viewState, filtered, pageSize);
+                    var (inputChanged, shouldExit) = Input.HandleInput(viewState, filtered, pageSize,
+                        viewState.Workspace == AppShell.PortWorkspace ? connections.Count : -1);
 
                     if (shouldExit)
                         break;
@@ -75,7 +81,7 @@ class Program
                     bool refreshed = false;
 
                     // Only render stats if not in system workspace
-                    if (StatsCollector.StatsDirty && StatsCollector.Current is not null && viewState.Workspace != AppShell.SystemWorkspace)
+                    if (StatsCollector.StatsDirty && StatsCollector.Current is not null && viewState.Workspace != AppShell.PortWorkspace)
                     {
                         AppShell.RenderStats(layout, StatsCollector.Current, gpuName, gpuDriver, gpuVramTotalMB);
                         StatsCollector.StatsDirty = false;
@@ -99,6 +105,24 @@ class Program
 
                         ProcessTable.Render(procTable, filtered, viewState, pageSize);
                         StatsCollector.ProcDirty = false;
+                        refreshed = true;
+                    }
+
+                    if (StatsCollector.PortDirty || inputChanged)
+                    {
+                        if (connections.Count == 0)
+                        {
+                            viewState.PortSelectedIndex = 0;
+                            viewState.PortScrollOffset = 0;
+                        }
+                        else
+                        {
+                            viewState.PortSelectedIndex = Math.Clamp(viewState.PortSelectedIndex, 0, connections.Count - 1);
+                            viewState.PortScrollOffset = Math.Clamp(viewState.PortScrollOffset, 0, Math.Max(0, connections.Count - pageSize));
+                        }
+
+                        PortsTable.Render(portsTable, connections, viewState, pageSize);
+                        StatsCollector.PortDirty = false;
                         refreshed = true;
                     }
 

@@ -340,6 +340,9 @@ public partial class ProcessMonitor
         };
     }
 
+    // Volatile snapshot of the last Refresh (list is replaced, never mutated).
+    public List<ProcessInfo> Snapshot() => _cache;
+
     public static void Kill(int pid)
     {
         try
