@@ -9,8 +9,7 @@ namespace src;
 class Program
 {
     private static int _cachedWindowHeight = -1;
-    private static int _cachedPageSize = 10;
-    private static int _cachedWorkspace = -1;
+    private static readonly int[] _cachedPageSizes = new int[AppShell.WorkspaceNames.Length];
 
     static void Main()
     {
@@ -63,8 +62,10 @@ class Program
                 {
                     var connections = portMonitor.Connections;
 
-                    int pageSize = CalculatePageSize(viewState.Workspace);
-                    var (inputChanged, shouldExit) = Input.HandleInput(viewState, filtered, pageSize, connections);
+                    int processPageSize = CalculatePageSize(0);
+                    int portPageSize = CalculatePageSize(AppShell.PortWorkspace);
+                    int activePageSize = viewState.Workspace == AppShell.PortWorkspace ? portPageSize : processPageSize;
+                    var (inputChanged, shouldExit) = Input.HandleInput(viewState, filtered, activePageSize, connections);
 
                     if (shouldExit)
                         break;
@@ -74,7 +75,6 @@ class Program
                         shown = viewState.Workspace;
                         ctx.UpdateTarget(workspaces[shown]);
                         StatsCollector.StatsDirty = true;
-                        pageSize = CalculatePageSize(shown);
                     }
 
                     bool refreshed = false;
@@ -99,10 +99,10 @@ class Program
                         else
                         {
                             viewState.SelectedIndex = Math.Clamp(viewState.SelectedIndex, 0, filtered.Count - 1);
-                            viewState.ScrollOffset = Math.Clamp(viewState.ScrollOffset, 0, Math.Max(0, filtered.Count - pageSize));
+                            viewState.ScrollOffset = Math.Clamp(viewState.ScrollOffset, 0, Math.Max(0, filtered.Count - processPageSize));
                         }
 
-                        ProcessTable.Render(procTable, filtered, viewState, pageSize);
+                        ProcessTable.Render(procTable, filtered, viewState, processPageSize);
                         StatsCollector.ProcDirty = false;
                         refreshed = true;
                     }
@@ -117,10 +117,10 @@ class Program
                         else
                         {
                             viewState.PortSelectedIndex = Math.Clamp(viewState.PortSelectedIndex, 0, connections.Count - 1);
-                            viewState.PortScrollOffset = Math.Clamp(viewState.PortScrollOffset, 0, Math.Max(0, connections.Count - pageSize));
+                            viewState.PortScrollOffset = Math.Clamp(viewState.PortScrollOffset, 0, Math.Max(0, connections.Count - portPageSize));
                         }
 
-                        PortsTable.Render(portsTable, connections, viewState, pageSize);
+                        PortsTable.Render(portsTable, connections, viewState, portPageSize);
                         AppShell.UpdatePortsStatus(systemLayout, connections.Count);
                         StatsCollector.PortDirty = false;
                         refreshed = true;
@@ -138,19 +138,23 @@ class Program
     private static int CalculatePageSize(int workspace)
     {
         int currentHeight = Console.WindowHeight;
-        if (currentHeight == _cachedWindowHeight && workspace == _cachedWorkspace)
-            return _cachedPageSize;
+        if (currentHeight != _cachedWindowHeight)
+        {
+            _cachedWindowHeight = currentHeight;
+            Array.Clear(_cachedPageSizes);
+        }
+        else if (_cachedPageSizes[workspace] > 0)
+        {
+            return _cachedPageSizes[workspace];
+        }
 
-        _cachedWindowHeight = currentHeight;
-        _cachedWorkspace = workspace;
         const int ChromeHeight = 2; // tab bar + hint bar
         int remainingForRows = currentHeight - ChromeHeight;
-        int processHeight = workspace == 0
+        int workspaceHeight = workspace == 0
             ? (int)(remainingForRows * 4.0 / 6.0)
             : remainingForRows;
         int tableChrome = workspace == 0 ? 4 : 3; // panel border + header (+ search caption)
 
-        _cachedPageSize = Math.Max(3, processHeight - tableChrome);
-        return _cachedPageSize;
+        return _cachedPageSizes[workspace] = Math.Max(3, workspaceHeight - tableChrome);
     }
 }
