@@ -58,6 +58,7 @@ public static class Input
                     {
                         state.PortSelectedIndex = selectedIndex;
                         state.PortScrollOffset = scrollOffset;
+                        return (true, false);
                     }
                     else
                     {
@@ -82,6 +83,7 @@ public static class Input
                     {
                         state.PortSelectedIndex = selectedIndex;
                         state.PortScrollOffset = scrollOffset;
+                        return (true, false);
                     }
                     else
                     {
