@@ -36,13 +36,27 @@ public static class AppShell
 
     public static Layout CreateSystemLayout(Table portsTable)
     {
-        // Workspace 2: full-height live connection table
         var l = new Layout("Root").SplitRows(
             new Layout("Tabs").Size(1),
-            new Layout("Content"));
+            new Layout("Content"),
+            new Layout("Footer").Size(1));
 
         l["Content"].Update(new Panel(portsTable).Expand());
+        UpdatePortsStatus(l, 0);
         return l;
+    }
+
+    public static void UpdatePortsStatus(Layout layout, int connectionCount)
+    {
+        var bar = new Grid();
+        bar.AddColumn(new GridColumn { NoWrap = true, Padding = new Padding(1, 0, 0, 0) });
+        bar.AddColumn(new GridColumn { NoWrap = true, Alignment = Justify.Right });
+        bar.AddRow(
+            "[green]K[/]: Kill process | [red]Q[/]: Quit",
+            $"[OrangeRed1]{connectionCount} connections[/]");
+        bar.Expand = true;
+
+        layout["Footer"].Update(bar);
     }
 
     public static Markup TabBar(int active) =>

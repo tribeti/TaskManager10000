@@ -64,8 +64,7 @@ class Program
                     var connections = portMonitor.Connections;
 
                     int pageSize = CalculatePageSize(viewState.Workspace);
-                    var (inputChanged, shouldExit) = Input.HandleInput(viewState, filtered, pageSize,
-                        viewState.Workspace == AppShell.PortWorkspace ? connections.Count : -1);
+                    var (inputChanged, shouldExit) = Input.HandleInput(viewState, filtered, pageSize, connections);
 
                     if (shouldExit)
                         break;
@@ -122,6 +121,7 @@ class Program
                         }
 
                         PortsTable.Render(portsTable, connections, viewState, pageSize);
+                        AppShell.UpdatePortsStatus(systemLayout, connections.Count);
                         StatsCollector.PortDirty = false;
                         refreshed = true;
                     }
@@ -143,14 +143,14 @@ class Program
 
         _cachedWindowHeight = currentHeight;
         _cachedWorkspace = workspace;
-        const int ChromeHeight = 2; // tab bar + key hints bar
-        const int TableVerticalPadding = 4;
+        const int ChromeHeight = 2; // tab bar + hint bar
         int remainingForRows = currentHeight - ChromeHeight;
         int processHeight = workspace == 0
             ? (int)(remainingForRows * 4.0 / 6.0)
             : remainingForRows;
+        int tableChrome = workspace == 0 ? 4 : 3; // panel border + header (+ search caption)
 
-        _cachedPageSize = Math.Max(3, processHeight - TableVerticalPadding);
+        _cachedPageSize = Math.Max(3, processHeight - tableChrome);
         return _cachedPageSize;
     }
 }
